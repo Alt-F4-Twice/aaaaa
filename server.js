@@ -189,6 +189,7 @@ app.get("/counter", async (req, res) => {
     ip,
     risk,
     registered: false,
+    admin: false,
   };
 
   users.set(id, user);
@@ -236,7 +237,15 @@ app.get("/leaderboard", (req, res) => {
   }
 
   // Sort users by position
-  const sortedUsers = [...users.values()].sort((a, b) => a.position - b.position);
+  const allUsers = [...users.values()];
+
+const admins = allUsers.filter(u => u.admin);
+const normalUsers = allUsers.filter(u => !u.admin);
+
+admins.sort((a, b) => a.position - b.position);
+normalUsers.sort((a, b) => a.position - b.position);
+
+const sortedUsers = [...admins, ...normalUsers];
 
   // Auto-refresh interval in seconds
   const refreshInterval = 5; // refresh every 5 seconds
@@ -244,13 +253,13 @@ app.get("/leaderboard", (req, res) => {
   // Build HTML table
   let tableRows = "";
   sortedUsers.forEach(u => {
-    tableRows += `<tr>
-      <td>${u.position}</td>
-      <td>${u.id}${u.ip === "TEST" ? " (TEST)" : ""}</td>
-      <td>${u.registered ? "yes" : "no"}</td>
-      <td>${u.ip}</td>
-    </tr>`;
-  });
+  tableRows += `<tr>
+    <td>${u.position}</td>
+    <td>${u.id}${u.admin ? " ⭐ ADMIN" : ""}${u.ip === "TEST" ? " (TEST)" : ""}</td>
+    <td>${u.registered ? "yes" : "no"}</td>
+    <td>${u.ip}</td>
+  </tr>`;
+});
 
   const html = `
     <!DOCTYPE html>
@@ -307,6 +316,39 @@ app.get("/register/:id", (req, res) => {
   user.registered = true;
   res.setHeader("Content-Type", "application/json");
   res.send(JSON.stringify(user, null, 2));
+});
+
+app.get("/registeradmin", (req, res) => {
+  const key = req.query.key;
+
+  if (key !== ADMIN_KEY) {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  const id = getUniqueId();
+  const position = positionCounter++;
+  const name = getName(req);
+
+  const user = {
+    id,
+    name,
+    position,
+    viewKey: generateKey(16),
+    deleteKey: generateKey(),
+    joined: new Date().toISOString(),
+    device: req.headers["user-agent"],
+    ip: "ADMIN",
+    risk: 0,
+    registered: true,
+    admin: true   // ⭐ THIS is the important part
+  };
+
+  users.set(id, user);
+
+  res.json({
+    message: "Admin registered",
+    user
+  });
 });
 
 // DELETE ROUTE
